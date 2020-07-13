@@ -67,14 +67,14 @@ class MustNotHaveGapsPolygonRule(AbstractTopologyRule):
                                 self.expressionBuilder.ST_MakePolygon(
                                     self.expressionBuilder.ST_ExteriorRing(
                                         self.expressionBuilder.ST_Union(
-                                        self.expressionBuilder.geometry(polygon1),
-                                        self.expressionBuilder.column(self.geomName)
+                                            self.expressionBuilder.geometry(polygon1),
+                                            self.expressionBuilder.column(self.geomName)
                                         )
                                     )
                                 ),
                                 self.expressionBuilder.ST_Union(
-                                        self.expressionBuilder.geometry(polygon1),
-                                        self.expressionBuilder.column(self.geomName)
+                                    self.expressionBuilder.geometry(polygon1),
+                                    self.expressionBuilder.column(self.geomName)
                                 )
                             )
                         ),
@@ -86,14 +86,14 @@ class MustNotHaveGapsPolygonRule(AbstractTopologyRule):
                                             self.expressionBuilder.ST_MakePolygon(
                                                 self.expressionBuilder.ST_ExteriorRing(
                                                     self.expressionBuilder.ST_Union(
-                                                    self.expressionBuilder.geometry(polygon1),
-                                                    self.expressionBuilder.column(self.geomName)
+                                                        self.expressionBuilder.geometry(polygon1),
+                                                        self.expressionBuilder.column(self.geomName)
                                                     )
                                                 )
                                             ),
                                             self.expressionBuilder.ST_Union(
-                                                    self.expressionBuilder.geometry(polygon1),
-                                                    self.expressionBuilder.column(self.geomName)
+                                                self.expressionBuilder.geometry(polygon1),
+                                                self.expressionBuilder.column(self.geomName)
                                             )
                                         )
                                 )
@@ -103,8 +103,7 @@ class MustNotHaveGapsPolygonRule(AbstractTopologyRule):
                     )
                 ).toString()
             )
-            feature2 = theDataSet2.findFirst(self.expression)
-            if feature2 != None:
+            if theDataSet2.findFirst(self.expression) != None:
                 result[0] = True
         return result
     
