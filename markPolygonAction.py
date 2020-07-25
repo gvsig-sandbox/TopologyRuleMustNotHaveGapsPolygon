@@ -1,6 +1,8 @@
 # encoding: utf-8
 
 import gvsig
+import math
+import statistics
 import sys
 
 from datetime import datetime
@@ -15,7 +17,6 @@ class MarkPolygonAction(AbstractTopologyRuleAction):
     selectedRowCount = 0
     linesCount = 0
     errorsLayerName = ""
-    gaps = None
     
     def __init__(self):
         AbstractTopologyRuleAction.__init__(
@@ -33,14 +34,12 @@ class MarkPolygonAction(AbstractTopologyRuleAction):
             self.checkSelectedRowCount()
             
             polygon = line.getFeature1().getFeature().getDefaultGeometry()
+            tolerance = rule.getTolerance()
             theDataSet = line.getDataSet1()
-            if self.gaps == None:
-                self.findGaps(polygon, theDataSet)
-            if self.gaps != None and (polygon.intersects(self.gaps) and polygon.intersection(self.gaps).perimeter() > 0.0):
-                errorsLayer = gvsig.currentView().getLayer(self.errorsLayerName)
-                errorsLayer.edit()
-                errorsLayer.append(GEOMETRY=polygon.intersection(self.gaps))
-                errorsLayer.commit()
+            errorsLayer = gvsig.currentView().getLayer(self.errorsLayerName)
+            errorsLayer.edit()
+            self.findGaps(polygon, theDataSet, tolerance, errorsLayer)
+            errorsLayer.commit()
             
             self.linesCount += 1
             
@@ -93,22 +92,85 @@ class MarkPolygonAction(AbstractTopologyRuleAction):
             self.selectedRowCount = 0
             self.linesCount = 0
             self.errorsLayerName = ""
-            self.gaps = None
     
-    def findGaps(self, polygon1, theDataSet2):
-        polygonsUnion = polygon1
+    def findGaps(self, polygon1, theDataSet2, tolerance1, errorsLayer):
         for featureReference in theDataSet2.query(polygon1):
             feature2 = featureReference.getFeature()
             polygon2 = feature2.getDefaultGeometry()
-            if not polygon1.equals(polygon2):
-                polygonsUnion = polygonsUnion.union(polygon2)
-        jtsPolygonsUnion = polygonsUnion.getJTS()
-        if jtsPolygonsUnion.getGeometryType() == "Polygon":
-            coordinates = jtsPolygonsUnion.getExteriorRing().getCoordinates()
-            vertices = []
-            for coordinate in coordinates:
-                vertices.append(geom.createPoint2D(coordinate.x, coordinate.y))
-            self.gaps = geom.createPolygon2D(vertices).difference(polygonsUnion)
+        
+            buffer1 = polygon1.buffer(tolerance1)
+            
+            if not polygon1.equals(polygon2) and buffer1.intersects(polygon2):
+                
+                difference1 = buffer1.union(polygon2).difference(polygon1).difference(polygon2)
+                
+                if difference1.getGeometryType().getType() == geom.POLYGON:
+                
+                    # Difference cleaning begins
+                    
+                    numVertices = difference1.getNumVertices()
+                    xCentroid, yCentroid = difference1.centroid().getX(), difference1.centroid().getY()
+                    distances = []
+                    for i in range(0, numVertices):
+                        distances.append(math.sqrt(math.pow(difference1.getVertex(i).getX() - xCentroid, 2) + math.pow(difference1.getVertex(i).getY() - yCentroid, 2)))
+                    
+                    distancesMean = statistics.mean(distances)
+                    distancesStDev = statistics.stdev(distances)
+                    removableVertices = []
+                    for i in range(0, numVertices):
+                        if abs(distances[i] - distancesMean) > 2 * distancesStDev:
+                            removableVertices.append(difference1.getVertex(i))
+                    
+                    for i in range(0, len(removableVertices)):
+                        for j in range(0, difference1.getNumVertices()):
+                            if difference1.getVertex(j).equals(removableVertices[i]):
+                                difference1.removeVertex(j)
+                                break
+                    
+                    # Difference cleaning ends
+                    
+                    try:
+                        intersection1 = difference1.intersection(polygon1)
+                        intersection2 = difference1.intersection(polygon2)
+                    except:
+                        intersection1 = None
+                        intersection2 = None
+                    if intersection1 != None and intersection2 != None:
+                        geometryType1 = intersection1.getGeometryType()
+                        geometryType2 = intersection2.getGeometryType()
+                        if geometryType1.getType() in (geom.LINE, geom.MULTILINE) and geometryType2.getType() in (geom.LINE, geom.MULTILINE):
+                            try:
+                                intersection3 = intersection1.intersection(intersection2)
+                            except:
+                                intersection3 = None
+                            if intersection3 != None:
+                                geometryType3 = intersection3.getGeometryType()
+                                if geometryType3.getType() in (geom.LINE, geom.MULTILINE):
+                                    try:
+                                        intersection4 = polygon1.intersection(polygon2)
+                                    except:
+                                        intersection4 = None
+                                    if intersection4 != None:
+                                        geometryType4 = intersection4.getGeometryType()
+                                        if geometryType4.getType() in (geom.LINE, geom.MULTILINE):
+                                            if not intersection3.equals(intersection4):
+                                                try:
+                                                    difference1 = intersection3.difference(intersection4)
+                                                except:
+                                                    difference1 = None
+                                                if difference1 != None:
+                                                    geometryType5 = difference1.getGeometryType()
+                                                    if geometryType5.getType() == geom.LINE:
+                                                        errorsLayer.append(GEOMETRY=difference1)
+                            else:
+                                lines1 = polygon2.toLines()
+                                lines2 = intersection2.toLines()
+                                for i in range(0, lines2.getPrimitivesNumber()):
+                                    for j in range(0, lines1.getPrimitivesNumber()):
+                                       line2 = lines2.getPrimitiveAt(i)
+                                       if line2.difference(lines1.getPrimitiveAt(j)) == None:
+                                          errorsLayer.append(GEOMETRY=line2)
+                                          break
     
 def main(*args):
     pass

@@ -25,7 +25,7 @@ class MustNotHaveGapsPolygonRuleFactory(AbstractTopologyRuleFactory):
         )
     
     def createRule(self, plan, dataSet1, dataSet2, tolerance):
-        rule = MustNotHaveGapsPolygonRule(plan, self, dataSet1)
+        rule = MustNotHaveGapsPolygonRule(plan, self, tolerance, dataSet1)
         return rule
 
 def selfRegister():

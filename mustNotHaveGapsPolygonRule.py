@@ -1,6 +1,8 @@
 # encoding: utf-8
 
 import gvsig
+import math
+import statistics
 import sys
 
 from gvsig import geom
@@ -20,35 +22,91 @@ class MustNotHaveGapsPolygonRule(AbstractTopologyRule):
     geomName = None
     expression = None
     expressionBuilder = None
-    gaps = None
+    hasGaps = False
     
-    def __init__(self, plan, factory, dataSet1):
-        AbstractTopologyRule.__init__(self, plan, factory, 0, dataSet1, dataSet1)
+    def __init__(self, plan, factory, tolerance, dataSet1):
+        AbstractTopologyRule.__init__(self, plan, factory, tolerance, dataSet1, dataSet1)
         self.addAction(DeletePolygonAction())
         self.addAction(MarkPolygonAction())
     
-    def findGaps(self, polygon1, theDataSet2):
-        polygonsUnion = polygon1
+    def findGaps(self, polygon1, theDataSet2, tolerance1):
         for featureReference in theDataSet2.query(polygon1):
             feature2 = featureReference.getFeature()
             polygon2 = feature2.getDefaultGeometry()
-            if not polygon1.equals(polygon2):
-                polygonsUnion = polygonsUnion.union(polygon2)
-        jtsPolygonsUnion = polygonsUnion.getJTS()
-        if jtsPolygonsUnion.getGeometryType() == "Polygon":
-            coordinates = jtsPolygonsUnion.getExteriorRing().getCoordinates()
-            vertices = []
-            for coordinate in coordinates:
-                vertices.append(geom.createPoint2D(coordinate.x, coordinate.y))
-            self.gaps = geom.createPolygon2D(vertices).difference(polygonsUnion)
+        
+            buffer1 = polygon1.buffer(tolerance1)
+            
+            if not polygon1.equals(polygon2) and buffer1.intersects(polygon2):
+                
+                try:
+                    difference1 = buffer1.union(polygon2).difference(polygon1).difference(polygon2)
+                except:
+                    difference1 = None
+                if difference1 != None and (difference1.getGeometryType().getType() == geom.POLYGON  or difference1.getGeometryType().isTypeOf(geom.POLYGON)):
+                    
+                    # Difference cleaning begins
+                    
+                    numVertices = difference1.getNumVertices()
+                    xCentroid, yCentroid = difference1.centroid().getX(), difference1.centroid().getY()
+                    distances = []
+                    for i in range(0, numVertices):
+                        distances.append(math.sqrt(math.pow(difference1.getVertex(i).getX() - xCentroid, 2) + math.pow(difference1.getVertex(i).getY() - yCentroid, 2)))
+                    
+                    distancesMean = statistics.mean(distances)
+                    distancesStDev = statistics.stdev(distances)
+                    removableVertices = []
+                    for i in range(0, numVertices):
+                        if abs(distances[i] - distancesMean) > 2 * distancesStDev:
+                            removableVertices.append(difference1.getVertex(i))
+                    
+                    for i in range(0, len(removableVertices)):
+                        for j in range(0, difference1.getNumVertices()):
+                            if difference1.getVertex(j).equals(removableVertices[i]):
+                                difference1.removeVertex(j)
+                                break
+                    
+                    # Difference cleaning ends
+                    
+                    try:
+                        intersection1 = difference1.intersection(polygon1)
+                        intersection2 = difference1.intersection(polygon2)
+                    except:
+                        intersection1 = None
+                        intersection2 = None
+                    if intersection1 != None and intersection2 != None:
+                        geometryType1 = intersection1.getGeometryType()
+                        geometryType2 = intersection2.getGeometryType()
+                        if geometryType1.getType() in (geom.LINE, geom.MULTILINE) and geometryType2.getType() in (geom.LINE, geom.MULTILINE):
+                            try:
+                                intersection3 = intersection1.intersection(intersection2)
+                            except:
+                                intersection3 = None
+                            if intersection3 != None:
+                                geometryType3 = intersection3.getGeometryType()
+                                if geometryType3.getType() in (geom.LINE, geom.MULTILINE):
+                                    try:
+                                        intersection4 = polygon1.intersection(polygon2)
+                                    except:
+                                        intersection4 = None
+                                    if intersection4 != None:
+                                        geometryType4 = intersection4.getGeometryType()
+                                        if geometryType4.getType() in (geom.LINE, geom.MULTILINE):
+                                            if not intersection3.equals(intersection4):
+                                                self.hasGaps = True
+                            else:
+                                self.hasGaps = True
+                                break
+            if self.hasGaps:
+                break
     
-    def hasGaps(self, polygon1, theDataSet2):
+    def checkGaps(self, polygon1, theDataSet2, tolerance1):
         result = [False, []]
         if theDataSet2.getSpatialIndex() != None:
-            if self.gaps == None: 
-                self.findGaps(polygon1, theDataSet2)
-            if self.gaps != None and (polygon1.intersects(self.gaps) and polygon1.intersection(self.gaps).perimeter() > 0.0):
+            if not self.hasGaps: 
+                self.findGaps(polygon1, theDataSet2, tolerance1)
+            if self.hasGaps:
                 result[0] = True
+                self.hasGaps = False
         else:
             if self.expression == None:
                 self.expression = ExpressionEvaluatorLocator.getManager().createExpression()
@@ -110,11 +168,12 @@ class MustNotHaveGapsPolygonRule(AbstractTopologyRule):
     def check(self, taskStatus, report, feature1):
         try:
             polygon1 = feature1.getDefaultGeometry()
+            tolerance1 = self.getTolerance()
             theDataSet2 = self.getDataSet1()
             geometryType1 = polygon1.getGeometryType()
             if geometryType1.getSubType() == geom.D2 or geometryType1.getSubType() == geom.D2M:
                 if geometryType1.getType() == geom.POLYGON or geometryType1.isTypeOf(geom.POLYGON):
-                    result = self.hasGaps(polygon1, theDataSet2)
+                    result = self.checkGaps(polygon1, theDataSet2, tolerance1)
                     if result[0]:
                         report.addLine(self,
                             self.getDataSet1(),
@@ -133,13 +192,13 @@ class MustNotHaveGapsPolygonRule(AbstractTopologyRule):
                     if geometryType1.getType() == geom.MULTIPOLYGON or geometryType1.isTypeOf(geom.MULTIPOLYGON):
                         n1 = polygon1.getPrimitivesNumber()
                         for i in range(0, n1 + 1):
-                            result = self.hasGaps(polygon1[i], theDataSet2)
+                            result = self.checkGaps(polygon1.getSurfaceAt(i), theDataSet2, tolerance1)
                             if result[0]:
                                 report.addLine(self,
                                     self.getDataSet1(),
                                     None,
                                     polygon1,
-                                    polygon1.getSurfaceAt(i),
+                                    polygon1,
                                     feature1.getReference(),
                                     None,
                                     -1,
