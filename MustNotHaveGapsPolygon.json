@@ -1,0 +1,31 @@
+{
+    "id": "MustNotHaveGapsPolygon",
+    "name": "Must Not Have Gaps",
+    "description": [ 
+        "<img src=\"@@@_d/mustNotHaveGaps.png\">\n",
+        "The rule requires that the polygons not have a null area between them. ",
+        "For this rule, there is one input layer of polygons, ",
+        "to which the topological rule applies. ",
+        "If the polygons have some null area line errors are created which make a polygon error."
+    ],
+    "actions" : {
+        "DeletePolygon": {
+            "name" : "Delete Polygon",
+            "description": [ 
+                "This action deletes the polygons errors, ",
+                "these are the polygons that are limited with the null space. ",
+                "The polygons to delete can be selected individually."    
+            ]
+        },            
+        "MarkPolygon": {
+            "name" : "Mark Polygon",
+            "description": [ 
+                "This action marks the lines errors, ",
+                "these errors are the limit of the polygons that border the empty space. ",
+                "So this action makes a new layer with the polygons errors. ",
+                "Mark the portion of the entities that do not comply with the rule, ",
+                "the polygons to mark can be selected individually."
+            ]
+        }
+    }
+}
