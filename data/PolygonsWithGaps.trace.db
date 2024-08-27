@@ -1,0 +1,4 @@
+2024-08-09 13:06:04 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLException: Tabla "SPATIAL_REF_SYS" no encontrada
+Table "SPATIAL_REF_SYS" not found; SQL statement:
+SELECT TOP 1 SRID FROM SPATIAL_REF_SYS [42102-196]

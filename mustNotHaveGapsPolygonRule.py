@@ -10,13 +10,19 @@ from gvsig import uselib
 uselib.use_plugin("org.gvsig.topology.app.mainplugin")
 
 from org.gvsig.expressionevaluator import ExpressionEvaluatorLocator
-# from org.gvsig.expressionevaluator import GeometryExpressionEvaluatorLocator
+#from org.gvsig.expressionevaluator import GeometryExpressionEvaluatorLocator
+from org.gvsig.expressionevaluator import GeometryExpressionUtils
 from org.gvsig.topology.lib.api import TopologyLocator
 from org.gvsig.topology.lib.spi import AbstractTopologyRule
 
 from deletePolygonAction import DeletePolygonAction
 from markPolygonAction import MarkPolygonAction
 
+def __getTolerance(t):
+    if t < 1:
+        return 1
+    return t
+        
 class MustNotHaveGapsPolygonRule(AbstractTopologyRule):
     
     geomName = None
@@ -24,10 +30,10 @@ class MustNotHaveGapsPolygonRule(AbstractTopologyRule):
     expressionBuilder = None
     hasGaps = False
     
-    def __init__(self, plan, factory, tolerance, dataSet1):
-        AbstractTopologyRule.__init__(self, plan, factory, tolerance, dataSet1, dataSet1)
-        self.addAction(DeletePolygonAction())
-        self.addAction(MarkPolygonAction())
+    def __init__(self, factory, tolerance, dataSet1):
+        AbstractTopologyRule.__init__(self, factory, __getTolerance(tolerance), dataSet1, dataSet1)
+        #self.addAction(CreatePolygonAction())
+        #self.addAction(MergePolygonAction())
     
     def findGaps(self, polygon1, theDataSet2, tolerance1):
         for featureReference in theDataSet2.query(polygon1):
@@ -99,9 +105,9 @@ class MustNotHaveGapsPolygonRule(AbstractTopologyRule):
             if self.hasGaps:
                 break
     
-    def checkGaps(self, polygon1, theDataSet2, tolerance1):
+    def checkGaps(self, polygon1, theDataSet2, tolerance1, srs):
         result = [False, []]
-        if theDataSet2.getSpatialIndex() != None:
+        if True: #theDataSet2.getSpatialIndex() != None:
             if not self.hasGaps: 
                 self.findGaps(polygon1, theDataSet2, tolerance1)
             if self.hasGaps:
@@ -110,8 +116,8 @@ class MustNotHaveGapsPolygonRule(AbstractTopologyRule):
         else:
             if self.expression == None:
                 self.expression = ExpressionEvaluatorLocator.getManager().createExpression()
-                self.expressionBuilder = ExpressionEvaluatorLocator.getManager().createExpressionBuilder()
-                # self.expressionBuilder = GeometryExpressionEvaluatorLocator.getManager().createExpressionBuilder()
+                #self.expressionBuilder = ExpressionEvaluatorLocator.getManager().createExpressionBuilder()
+                self.expressionBuilder = GeometryExpressionUtils.createExpressionBuilder()
                 store2 = theDataSet2.getFeatureStore()
                 self.geomName = store2.getDefaultFeatureType().getDefaultGeometryAttributeName()
             self.expression.setPhrase(
@@ -120,18 +126,18 @@ class MustNotHaveGapsPolygonRule(AbstractTopologyRule):
                     self.expressionBuilder.constant(False),
                     self.expressionBuilder.and(
                         self.expressionBuilder.ST_Intersects(
-                            self.expressionBuilder.geometry(polygon1),
+                            self.expressionBuilder.geometry(polygon1,srs),
                             self.expressionBuilder.ST_Difference(
                                 self.expressionBuilder.ST_MakePolygon(
                                     self.expressionBuilder.ST_ExteriorRing(
                                         self.expressionBuilder.ST_Union(
-                                            self.expressionBuilder.geometry(polygon1),
+                                            self.expressionBuilder.geometry(polygon1,srs),
                                             self.expressionBuilder.column(self.geomName)
                                         )
                                     )
                                 ),
                                 self.expressionBuilder.ST_Union(
-                                    self.expressionBuilder.geometry(polygon1),
+                                    self.expressionBuilder.geometry(polygon1,srs),
                                     self.expressionBuilder.column(self.geomName)
                                 )
                             )
@@ -139,18 +145,18 @@ class MustNotHaveGapsPolygonRule(AbstractTopologyRule):
                         self.expressionBuilder.gt(
                             self.expressionBuilder.ST_Length(
                                 self.expressionBuilder.ST_Intersection(
-                                    self.expressionBuilder.geometry(polygon1),
+                                    self.expressionBuilder.geometry(polygon1,srs),
                                         self.expressionBuilder.ST_Difference(
                                             self.expressionBuilder.ST_MakePolygon(
                                                 self.expressionBuilder.ST_ExteriorRing(
                                                     self.expressionBuilder.ST_Union(
-                                                        self.expressionBuilder.geometry(polygon1),
+                                                        self.expressionBuilder.geometry(polygon1,srs),
                                                         self.expressionBuilder.column(self.geomName)
                                                     )
                                                 )
                                             ),
                                             self.expressionBuilder.ST_Union(
-                                                self.expressionBuilder.geometry(polygon1),
+                                                self.expressionBuilder.geometry(polygon1,srs),
                                                 self.expressionBuilder.column(self.geomName)
                                             )
                                         )
@@ -161,19 +167,22 @@ class MustNotHaveGapsPolygonRule(AbstractTopologyRule):
                     )
                 ).toString()
             )
+            print self.expression.getPhrase()
             if theDataSet2.findFirst(self.expression) != None:
                 result[0] = True
+        #print "checkGaps exit"
         return result
     
     def check(self, taskStatus, report, feature1):
         try:
+            srs = feature1.getDefaultSRS()
             polygon1 = feature1.getDefaultGeometry()
             tolerance1 = self.getTolerance()
             theDataSet2 = self.getDataSet1()
             geometryType1 = polygon1.getGeometryType()
             if geometryType1.getSubType() == geom.D2 or geometryType1.getSubType() == geom.D2M:
                 if geometryType1.getType() == geom.POLYGON or geometryType1.isTypeOf(geom.POLYGON):
-                    result = self.checkGaps(polygon1, theDataSet2, tolerance1)
+                    result = self.checkGaps(polygon1, theDataSet2, tolerance1, srs)
                     if result[0]:
                         report.addLine(self,
                             self.getDataSet1(),
@@ -191,9 +200,11 @@ class MustNotHaveGapsPolygonRule(AbstractTopologyRule):
                 else:
                     if geometryType1.getType() == geom.MULTIPOLYGON or geometryType1.isTypeOf(geom.MULTIPOLYGON):
                         n1 = polygon1.getPrimitivesNumber()
-                        for i in range(0, n1 + 1):
-                            result = self.checkGaps(polygon1.getSurfaceAt(i), theDataSet2, tolerance1)
+                        for i in range(0, n1):
+                            result = self.checkGaps(polygon1.getSurfaceAt(i), theDataSet2, tolerance1, srs)
+                            #print "check 205"
                             if result[0]:
+                                #print "check 207"
                                 report.addLine(self,
                                     self.getDataSet1(),
                                     None,
@@ -207,6 +218,9 @@ class MustNotHaveGapsPolygonRule(AbstractTopologyRule):
                                     "The polygon has gaps.",
                                     ""
                                 )
+                                #print "check 221"
+                            #print "check 222"
+                        #print "check 223"
             else:
                 report.addLine(self,
                     self.getDataSet1(),
