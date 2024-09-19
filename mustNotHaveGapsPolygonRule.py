@@ -10,214 +10,173 @@ from gvsig import uselib
 uselib.use_plugin("org.gvsig.topology.app.mainplugin")
 
 from org.gvsig.expressionevaluator import ExpressionEvaluatorLocator
-#from org.gvsig.expressionevaluator import GeometryExpressionEvaluatorLocator
 from org.gvsig.expressionevaluator import GeometryExpressionUtils
 from org.gvsig.topology.lib.api import TopologyLocator
 from org.gvsig.topology.lib.spi import AbstractTopologyRule
+from org.gvsig.fmap.geom.jts.util import JTSUtils
 
 from deletePolygonAction import DeletePolygonAction
 from markPolygonAction import MarkPolygonAction
 
 def __getTolerance(t):
-    if t < 1:
+    if t < 0:
         return 1
     return t
-        
+
+class GapsResult(object):
+    def __init__(self, hasGaps, errorGeom):
+        self.hasGaps = hasGaps
+        self.errorGeom = errorGeom
+
+    def getGeoms(self):
+        return (self.errorGeom,)
+
 class MustNotHaveGapsPolygonRule(AbstractTopologyRule):
     
     geomName = None
     expression = None
     expressionBuilder = None
-    hasGaps = False
     
-    def __init__(self, factory, tolerance, dataSet1):
-        AbstractTopologyRule.__init__(self, factory, __getTolerance(tolerance), dataSet1, dataSet1)
-        #self.addAction(CreatePolygonAction())
-        #self.addAction(MergePolygonAction())
+    def __init__(self, factory=None, tolerance=None, dataSet1=None):
+        if factory == None:
+            AbstractTopologyRule.__init__(self)
+        else :
+            AbstractTopologyRule.__init__(self, factory, __getTolerance(tolerance), dataSet1, dataSet1)
+            #self.addAction(CreatePolygonAction())
+            #self.addAction(MergePolygonAction())
     
-    def findGaps(self, polygon1, theDataSet2, tolerance1):
-        for featureReference in theDataSet2.query(polygon1):
+    def isGapInTolerance(self, polygon1, gap, tolerance):
+        centroid = gap.centroid()
+        if polygon1.distance(centroid) > tolerance:
+            return False
+        return True
+
+    def validateCoverage(self, polygon1, theDataSet2, tolerance1):
+        print "polygon1 = %s"%polygon1.convertToWKTQuietly()
+        envelope = polygon1.getEnvelope()
+        envelopeGeometry = envelope.getGeometry()
+        polygons = theDataSet2.query(polygon1)
+
+        coverage = list()
+        for featureReference in polygons :
             feature2 = featureReference.getFeature()
             polygon2 = feature2.getDefaultGeometry()
-        
-            buffer1 = polygon1.buffer(tolerance1)
-            
-            if not polygon1.equals(polygon2) and buffer1.intersects(polygon2):
-                
-                try:
-                    difference1 = buffer1.union(polygon2).difference(polygon1).difference(polygon2)
-                except:
-                    difference1 = None
-                if difference1 != None and (difference1.getGeometryType().getType() == geom.POLYGON  or difference1.getGeometryType().isTypeOf(geom.POLYGON)):
-                    
-                    # Difference cleaning begins
-                    
-                    numVertices = difference1.getNumVertices()
-                    xCentroid, yCentroid = difference1.centroid().getX(), difference1.centroid().getY()
-                    distances = []
-                    for i in range(0, numVertices):
-                        distances.append(math.sqrt(math.pow(difference1.getVertex(i).getX() - xCentroid, 2) + math.pow(difference1.getVertex(i).getY() - yCentroid, 2)))
-                    
-                    distancesMean = statistics.mean(distances)
-                    distancesStDev = statistics.stdev(distances)
-                    removableVertices = []
-                    for i in range(0, numVertices):
-                        if abs(distances[i] - distancesMean) > 2 * distancesStDev:
-                            removableVertices.append(difference1.getVertex(i))
-                    
-                    for i in range(0, len(removableVertices)):
-                        for j in range(0, difference1.getNumVertices()):
-                            if difference1.getVertex(j).equals(removableVertices[i]):
-                                difference1.removeVertex(j)
-                                break
-                    
-                    # Difference cleaning ends
-                    
-                    try:
-                        intersection1 = difference1.intersection(polygon1)
-                        intersection2 = difference1.intersection(polygon2)
-                    except:
-                        intersection1 = None
-                        intersection2 = None
-                    if intersection1 != None and intersection2 != None:
-                        geometryType1 = intersection1.getGeometryType()
-                        geometryType2 = intersection2.getGeometryType()
-                        if geometryType1.getType() in (geom.LINE, geom.MULTILINE) and geometryType2.getType() in (geom.LINE, geom.MULTILINE):
-                            try:
-                                intersection3 = intersection1.intersection(intersection2)
-                            except:
-                                intersection3 = None
-                            if intersection3 != None:
-                                geometryType3 = intersection3.getGeometryType()
-                                if geometryType3.getType() in (geom.LINE, geom.MULTILINE):
-                                    try:
-                                        intersection4 = polygon1.intersection(polygon2)
-                                    except:
-                                        intersection4 = None
-                                    if intersection4 != None:
-                                        geometryType4 = intersection4.getGeometryType()
-                                        if geometryType4.getType() in (geom.LINE, geom.MULTILINE):
-                                            if not intersection3.equals(intersection4):
-                                                self.hasGaps = True
-                            else:
-                                self.hasGaps = True
-                                break
-            if self.hasGaps:
+            if not polygon2.intersects(envelopeGeometry) or polygon2.equals(polygon1):
+              print "Salto el Id %s al obtener la cobertura "%feature2.get("ID")
+              continue
+            coverage.append(polygon2)
+        print "Envelope = %s"%envelope
+        errorGeom = polygon1.validateCoverage(coverage, tolerance1)
+        if errorGeom != None:
+            return GapsResult(True, errorGeom)
+        return GapsResult(False, None)
+
+    def isGap(self, gap, polygon1, theDataSet2):
+        if gap == None:
+            return False
+        print "gap = %s"%gap.convertToWKTQuietly()
+        if gap.getEnvelope().isCollapsed():
+            print "collapsed"
+            return False
+        if not gap.intersects(polygon1):
+            print "not intersects"
+            return False
+        polygons = theDataSet2.query(polygon1)
+        intersects = False
+        for featureReference in polygons:
+            feature = featureReference.getFeature()
+            polygon = feature.getDefaultGeometry()
+            if polygon.equals(polygon1):
+                continue
+            if gap.intersects(polygon):
+                intersects = True;
                 break
-    
-    def checkGaps(self, polygon1, theDataSet2, tolerance1, srs):
-        result = [False, []]
-        if True: #theDataSet2.getSpatialIndex() != None:
-            if not self.hasGaps: 
-                self.findGaps(polygon1, theDataSet2, tolerance1)
-            if self.hasGaps:
-                result[0] = True
-                self.hasGaps = False
-        else:
-            if self.expression == None:
-                self.expression = ExpressionEvaluatorLocator.getManager().createExpression()
-                #self.expressionBuilder = ExpressionEvaluatorLocator.getManager().createExpressionBuilder()
-                self.expressionBuilder = GeometryExpressionUtils.createExpressionBuilder()
-                store2 = theDataSet2.getFeatureStore()
-                self.geomName = store2.getDefaultFeatureType().getDefaultGeometryAttributeName()
-            self.expression.setPhrase(
-                self.expressionBuilder.ifnull(
-                    self.expressionBuilder.column(self.geomName),
-                    self.expressionBuilder.constant(False),
-                    self.expressionBuilder.and(
-                        self.expressionBuilder.ST_Intersects(
-                            self.expressionBuilder.geometry(polygon1,srs),
-                            self.expressionBuilder.ST_Difference(
-                                self.expressionBuilder.ST_MakePolygon(
-                                    self.expressionBuilder.ST_ExteriorRing(
-                                        self.expressionBuilder.ST_Union(
-                                            self.expressionBuilder.geometry(polygon1,srs),
-                                            self.expressionBuilder.column(self.geomName)
-                                        )
-                                    )
-                                ),
-                                self.expressionBuilder.ST_Union(
-                                    self.expressionBuilder.geometry(polygon1,srs),
-                                    self.expressionBuilder.column(self.geomName)
-                                )
-                            )
-                        ),
-                        self.expressionBuilder.gt(
-                            self.expressionBuilder.ST_Length(
-                                self.expressionBuilder.ST_Intersection(
-                                    self.expressionBuilder.geometry(polygon1,srs),
-                                        self.expressionBuilder.ST_Difference(
-                                            self.expressionBuilder.ST_MakePolygon(
-                                                self.expressionBuilder.ST_ExteriorRing(
-                                                    self.expressionBuilder.ST_Union(
-                                                        self.expressionBuilder.geometry(polygon1,srs),
-                                                        self.expressionBuilder.column(self.geomName)
-                                                    )
-                                                )
-                                            ),
-                                            self.expressionBuilder.ST_Union(
-                                                self.expressionBuilder.geometry(polygon1,srs),
-                                                self.expressionBuilder.column(self.geomName)
-                                            )
-                                        )
-                                )
-                            ),
-                            self.expressionBuilder.constant(0.0)
-                        )
-                    )
-                ).toString()
-            )
-            print self.expression.getPhrase()
-            if theDataSet2.findFirst(self.expression) != None:
-                result[0] = True
-        #print "checkGaps exit"
-        return result
+        return intersects
     
     def check(self, taskStatus, report, feature1):
         try:
+            print "id =%s"%feature1.get("ID")
             srs = feature1.getDefaultSRS()
             polygon1 = feature1.getDefaultGeometry()
             tolerance1 = self.getTolerance()
             theDataSet2 = self.getDataSet1()
+            result = self.validateCoverage(polygon1, theDataSet2, tolerance1)
+            if result.hasGaps:
+                for errorGeom in result.getGeoms():
+                    report.addLine(self,
+                        self.getDataSet1(),
+                        None,
+                        polygon1,
+                        errorGeom,
+                        feature1.getReference(),
+                        None,
+                        -1,
+                        -1,
+                        False,
+                        "The polygonal coverage is topologically wrong.",
+                        ""
+                    )
+            result = polygon1.findGaps(tolerance1)
+            if result != None: # or not result.isEmpty():
+                report.addLine(self,
+                    self.getDataSet1(),
+                    None,
+                    polygon1,
+                    result,
+                    feature1.getReference(),
+                    None,
+                    -1,
+                    -1,
+                    False,
+                    "The polygon has gaps.",
+                    ""
+                )
+
+            '''
             geometryType1 = polygon1.getGeometryType()
             if geometryType1.getSubType() == geom.D2 or geometryType1.getSubType() == geom.D2M:
                 if geometryType1.getType() == geom.POLYGON or geometryType1.isTypeOf(geom.POLYGON):
-                    result = self.checkGaps(polygon1, theDataSet2, tolerance1, srs)
-                    if result[0]:
-                        report.addLine(self,
-                            self.getDataSet1(),
-                            None,
-                            polygon1,
-                            polygon1,
-                            feature1.getReference(),
-                            None,
-                            -1,
-                            -1,
-                            False,
-                            "The polygon has gaps.",
-                            ""
-                        )
+                    result = self.validateCoverage(polygon1, theDataSet2, tolerance1)
+                    if result.hasGaps:
+                        for errorGeom in result.getGeoms():
+                            report.addLine(self,
+                                self.getDataSet1(),
+                                None,
+                                polygon1,
+                                errorGeom,
+                                feature1.getReference(),
+                                None,
+                                -1,
+                                -1,
+                                False,
+                                "The coverage is topologically wrong.",
+                                ""
+                            )
+                    result = polygon1
                 else:
                     if geometryType1.getType() == geom.MULTIPOLYGON or geometryType1.isTypeOf(geom.MULTIPOLYGON):
                         n1 = polygon1.getPrimitivesNumber()
                         for i in range(0, n1):
                             result = self.checkGaps(polygon1.getSurfaceAt(i), theDataSet2, tolerance1, srs)
                             #print "check 205"
-                            if result[0]:
+                            if result.hasGaps:
                                 #print "check 207"
-                                report.addLine(self,
-                                    self.getDataSet1(),
-                                    None,
-                                    polygon1,
-                                    polygon1,
-                                    feature1.getReference(),
-                                    None,
-                                    -1,
-                                    -1,
-                                    False,
-                                    "The polygon has gaps.",
-                                    ""
-                                )
+                                for errorGeom in result.getGeoms():
+                                    report.addLine(self,
+                                        self.getDataSet1(),
+                                        None,
+                                        polygon1,
+                                        errorGeom,
+                                        feature1.getReference(),
+                                        None,
+                                        -1,
+                                        -1,
+                                        False,
+                                        "The coverage is topologically wrong.",
+                                        ""
+                                    )
+                            result = self.checkGaps(polygon1.getSurfaceAt(i), theDataSet2, tolerance1, srs)
+                            #print "check 205"
                                 #print "check 221"
                             #print "check 222"
                         #print "check 223"
@@ -235,6 +194,7 @@ class MustNotHaveGapsPolygonRule(AbstractTopologyRule):
                     "Unsupported geometry subtype.",
                     ""
                 )
+            '''
         except:
             ex = sys.exc_info()[1]
             gvsig.logger("Can't execute rule. Class Name: " + ex.__class__.__name__ + ". Exception: " + str(ex), gvsig.LOGGER_ERROR)

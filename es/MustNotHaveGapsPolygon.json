@@ -1,0 +1,42 @@
+{
+    "id": "MustNotHaveGapsPolygon",
+    "name": "No debe tener huecos",
+    "description": [ 
+        "<img src=\"@@@_d/mustNotHaveGaps.png\">\n",
+        "Esta regla necesita una capa de entrada de polígonos.\n",
+        "Esta regla valida que un polígono forme una cobertura poligonal válida con el conjunto de polígonos adyacentes a él.\n",
+        "Un polígono es válido para la cobertura si:\n",
+        " - El interior del polígono no interseca el interior de otros polígonos.\n",
+        " - Si el límite del polígono interseca otro límite de polígono, los vértices y los segmentos de línea de la intersección coinciden exactamente.\n",
+        "El algoritmo detecta los siguientes errores de cobertura:\n",
+        " - el polígono es un duplicado de otro\n",
+        " - un segmento de límite de polígono es igual a un segmento adyacente (con la misma orientación). Esto determina que los polígonos se superponen\n",
+        " - un segmento de límite de polígono es colineal y se superpone a un segmento adyacente pero no es igual a él \n",
+        " - un segmento de límite de polígono toca un segmento adyacente en un punto que no es un vértice\n",
+        " - un segmento de límite de polígono se cruza con un polígono adyacente\n",
+        " - un segmento de límite de polígono está en el interior de un polígono adyacente\n",
+        "Si alguno de estos errores está presente, el polígono de destino no forma una cobertura válida con los polígonos adyacentes.\n",
+        "Esta regla también encuentra espacios en una cobertura poligonal.\n",
+        "Los huecos son agujeros en la cobertura que son más estrechos que un ancho determinado.\n"
+    ],
+    "actions" : {
+        "DeletePolygon": {
+            "name" : "Borrar Polígono",
+            "description": [ 
+                "Esta acción elimina los polígonos erróneos, ",
+                "es decir, los polígonos que están limitados por el espacio nulo. ",
+                "Los polígonos a eliminar se pueden seleccionar individualmente."    
+            ]
+        },            
+        "MarkPolygon": {
+            "name" : "Marcar Polígono",
+            "description": [ 
+                "Esta acción marca los errores de las líneas, ",
+                "estos errores son el límite de los polígonos que bordean el espacio vacío. ",
+                "Entonces esta acción crea una nueva capa con los errores de los polígonos ",
+                "Marca la porción de las entidades que no cumplen con la regla, ",
+                "los polígonos a marcar se pueden seleccionar individualmente."
+            ]
+        }
+    }
+}
