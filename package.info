@@ -1,0 +1,21 @@
+#
+#Fri Sep 20 08:23:39 CEST 2024
+owner=
+code=TopologyRuleMustNotHaveGapsPolygon
+java-version=j1_7
+official=false
+type=Script
+version=1.0.1-1
+state=testing
+operating-system=all
+dependencies=
+sources-url=
+web-url=
+architecture=all
+model-version=1.0.1
+categories=
+description=
+owner-url=
+buildNumber=1
+gvSIG-version=2.6.1
+name=TopologyRuleMustNotHaveGapsPolygon
