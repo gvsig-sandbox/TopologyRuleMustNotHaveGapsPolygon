@@ -26,9 +26,7 @@ class MustNotHaveGapsPolygonRuleSerializer(DefaultObjectSerializer):
         DefaultObjectSerializer.__init__(self,MustNotHaveGapsPolygonRule)
 
     def createNewObject(self):
-        print "----"
         x = MustNotHaveGapsPolygonRule()
-        print x
         return x
 
 
