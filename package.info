@@ -1,11 +1,11 @@
 #
-#Fri Sep 20 08:37:35 CEST 2024
+#Fri Sep 20 14:08:13 CEST 2024
 owner=
 code=TopologyRuleMustNotHaveGapsPolygon
-java-version=j1_7
-official=false
+java-version=j1_8
+official=true
 type=Script
-version=1.0.1-1
+version=1.0.1-2
 state=testing
 operating-system=all
 dependencies=
@@ -16,7 +16,7 @@ model-version=1.0.1
 categories=
 description=
 owner-url=
-buildNumber=1
-download-url=https\://github.com/gvsig-sandbox/TopologyRuleMustNotHaveGapsPolygon/releases/download/1.0.1-1/gvSIG-desktop-2.6.1-TopologyRuleMustNotHaveGapsPolygon-1.0.1-1-testing-all-all-j1_7.gvspkg
+buildNumber=2
+download-url=https\://github.com/gvsig-sandbox/TopologyRuleMustNotHaveGapsPolygon/releases/download/1.0.1-2/gvSIG-desktop-2.6.1-TopologyRuleMustNotHaveGapsPolygon-1.0.1-2-testing-all-all-j1_8.gvspkg
 gvSIG-version=2.6.1
 name=TopologyRuleMustNotHaveGapsPolygon
