@@ -47,7 +47,7 @@ class MustNotHaveGapsPolygonRuleFactory(AbstractTopologyRuleFactory):
             f = gvsig.getResource(__file__, "en","MustNotHaveGapsPolygon.json")
 
         url = URL("file",None,f)
-        self.load_from_resource(url)\n
+        self.load_from_resource(url)
     
     def createRule(self, dataSet1, dataSet2, tolerance):
         rule = MustNotHaveGapsPolygonRule(self, tolerance, dataSet1)

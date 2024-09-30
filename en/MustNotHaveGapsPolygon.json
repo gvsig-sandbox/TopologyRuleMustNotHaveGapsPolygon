@@ -17,7 +17,7 @@
         " - a polygon boundary segment is in the interior of an adjacent polygon\n",
         "If any of these errors is present, the target polygon does not form a valid coverage with the adjacent polygons.\n",
         "This rule also finds gaps in a polygonal coverage.\n",
-        "Gaps are holes in the coverage that are narrower than a given width.\n"
+        "Gaps are holes in the covering that are narrower than the width determined by the \"tolerance\" parameter.\n"
     ],
     "actions" : {
         "DeletePolygon": {

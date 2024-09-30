@@ -17,7 +17,7 @@
         " - un segmento de límite de polígono está en el interior de un polígono adyacente\n",
         "Si alguno de estos errores está presente, el polígono de destino no forma una cobertura válida con los polígonos adyacentes.\n",
         "Esta regla también encuentra espacios en una cobertura poligonal.\n",
-        "Los huecos son agujeros en la cobertura que son más estrechos que un ancho determinado.\n"
+        "Los huecos son agujeros en la cobertura que son más estrechos que el ancho determinado por el parámetro \"tolerancia\".\n"
     ],
     "actions" : {
         "DeletePolygon": {
